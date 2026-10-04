@@ -1,0 +1,8 @@
+{
+  "expo": {
+    "name": "Отчет по продажам",
+    "slug": "sales-report-app",
+    "version": "1.0.0",
+    "orientation": "portrait"
+  }
+}

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Товары, реализованные после указанной даты</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Товары, реализованные после указанной даты</h1>
+
+    <form id="form">
+        <label>Дата: <input type="date" id="date" required></label>
+        <button type="submit">Показать</button>
+    </form>
+
+    <p id="message" class="message"></p>
+
+    <div id="result" hidden>
+        <h2>Список реализованных товаров</h2>
+        <table id="report">
+            <thead>
+                <tr>
+                    <th class="num">№ п/п</th>
+                    <th>Наименование товара</th>
+                    <th class="num">Количество</th>
+                    <th class="num">Цена, руб.</th>
+                    <th class="num">Выручка, руб.</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4">Итого</td>
+                    <td class="num" id="total"></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <h2>Прейскурант цен</h2>
+    <table id="price_list">
+        <thead>
+            <tr>
+                <th class="num">№ п/п</th>
+                <th class="num">Код товара</th>
+                <th>Наименование товара</th>
+                <th class="num">Цена единицы, руб.</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <h2>Учет реализации товаров</h2>
+    <table id="sales">
+        <thead>
+            <tr>
+                <th class="num">№ п/п</th>
+                <th>Дата продажи</th>
+                <th class="num">Код товара</th>
+                <th>Наименование товара</th>
+                <th class="num">Количество</th>
+                <th class="num">Стоимость, руб.</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        // пути к API (при необходимости поменять)
+        const API_REPORT = 'sales_report.php';
+        const API_PRICE_LIST = 'read_price_list.php';
+        const API_SALES = 'read_sales.php';
+
+        const money = v => Number(v).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const dateRu = v => v.slice(0, 10).split('-').reverse().join('.');
+        const message = document.getElementById('message');
+
+        async function getJson(url) {
+            const res = await fetch(url);
+            const text = await res.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                throw new Error('Сервер вернул не JSON (HTTP ' + res.status + '): ' + text.slice(0, 300));
+            }
+        }
+
+        // cells: массив [текст, числовая ли колонка]
+        function fillTable(tbody, rows) {
+            tbody.innerHTML = '';
+            rows.forEach(cells => {
+                const tr = document.createElement('tr');
+                cells.forEach(([text, isNum]) => {
+                    const td = document.createElement('td');
+                    td.textContent = text;
+                    if (isNum) td.className = 'num';
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function loadSource() {
+            try {
+                const prices = await getJson(API_PRICE_LIST);
+                fillTable(document.querySelector('#price_list tbody'), prices.records.map(r => [
+                    [r.serial_no, true], [r.product_code, true], [r.product_name, false], [money(r.unit_price), true]
+                ]));
+                const sales = await getJson(API_SALES);
+                fillTable(document.querySelector('#sales tbody'), sales.records.map(r => [
+                    [r.sale_id, true], [dateRu(r.sale_date), false], [r.product_code, true],
+                    [r.product_name, false], [r.quantity_sold, true], [money(r.total_cost), true]
+                ]));
+            } catch (err) {
+                message.textContent = err.message;
+            }
+        }
+
+        document.getElementById('form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const result = document.getElementById('result');
+            message.textContent = '';
+            result.hidden = true;
+
+            try {
+                const data = await getJson(API_REPORT + '?date=' + encodeURIComponent(document.getElementById('date').value));
+                if (!data.records) {
+                    message.textContent = data.message || 'Ошибка';
+                    return;
+                }
+                let total = 0;
+                fillTable(document.querySelector('#report tbody'), data.records.map((r, i) => {
+                    total += Number(r.total_revenue);
+                    return [[i + 1, true], [r.product_name, false], [r.total_quantity, true],
+                            [money(r.price), true], [money(r.total_revenue), true]];
+                }));
+                document.getElementById('total').textContent = money(total);
+                result.hidden = false;
+            } catch (err) {
+                message.textContent = err.message;
+            }
+        });
+
+        loadSource();
+    </script>
+</body>
+</html>
